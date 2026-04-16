@@ -25,6 +25,7 @@ MAX_SEEN_TRANSACTIONS = 5000
 USER_AGENT = "smart-money-tracker/1.0"
 EVM_MONITOR_CHAINS = ("ethereum", "bnb", "base")
 SOL_MONITOR_CHAIN = "solana"
+MAX_WALLETS_PER_BATCH = 40
 
 
 @dataclass(slots=True)
@@ -215,6 +216,10 @@ def execute_dune_query(
     return execution_id
 
 
+def batch_addresses(addresses: list[str], batch_size: int = MAX_WALLETS_PER_BATCH) -> list[list[str]]:
+    return [addresses[index:index + batch_size] for index in range(0, len(addresses), batch_size)]
+
+
 def execute_sol_dune_query(
     session: requests.Session,
     query_id: int,
@@ -378,25 +383,29 @@ def run_once(
 
     rows: list[dict[str, Any]] = []
     if evm_watchlist:
-        evm_execution_id = execute_dune_query(
-            session=session,
-            query_id=evm_query_id,
-            addresses=[watch.address for watch in evm_watchlist],
-            blockchains=set(EVM_MONITOR_CHAINS),
-            start_time=start_time,
-            end_time=end_time,
-        )
-        rows.extend(wait_for_results(session, evm_execution_id))
+        evm_addresses = [watch.address for watch in evm_watchlist]
+        for address_batch in batch_addresses(evm_addresses):
+            evm_execution_id = execute_dune_query(
+                session=session,
+                query_id=evm_query_id,
+                addresses=address_batch,
+                blockchains=set(EVM_MONITOR_CHAINS),
+                start_time=start_time,
+                end_time=end_time,
+            )
+            rows.extend(wait_for_results(session, evm_execution_id))
 
     if sol_watchlist:
-        sol_execution_id = execute_sol_dune_query(
-            session=session,
-            query_id=sol_query_id,
-            addresses=[watch.address for watch in sol_watchlist],
-            start_time=start_time,
-            end_time=end_time,
-        )
-        rows.extend(wait_for_results(session, sol_execution_id))
+        sol_addresses = [watch.address for watch in sol_watchlist]
+        for address_batch in batch_addresses(sol_addresses):
+            sol_execution_id = execute_sol_dune_query(
+                session=session,
+                query_id=sol_query_id,
+                addresses=address_batch,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            rows.extend(wait_for_results(session, sol_execution_id))
 
     seen_tx_hashes: dict[str, str] = state.get("seen_tx_hashes", {})
     fresh_rows: list[tuple[dict[str, Any], list[WatchAddress]]] = []
