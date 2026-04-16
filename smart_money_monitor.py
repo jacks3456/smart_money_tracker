@@ -196,12 +196,12 @@ def execute_dune_query(
 ) -> str:
     payload = {
         "performance": "medium",
-        "query_parameters": [
-            {"key": "wallets_csv", "type": "text", "value": ",".join(addresses)},
-            {"key": "blockchains_csv", "type": "text", "value": ",".join(sorted(blockchains))},
-            {"key": "start_time", "type": "datetime", "value": start_time.strftime("%Y-%m-%d %H:%M:%S")},
-            {"key": "end_time", "type": "datetime", "value": end_time.strftime("%Y-%m-%d %H:%M:%S")},
-        ],
+        "query_parameters": {
+            "wallets_csv": ",".join(addresses),
+            "blockchains_csv": ",".join(sorted(blockchains)),
+            "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
     }
     response = session.post(
         f"{DUNE_API_BASE}/query/{query_id}/execute",
@@ -229,11 +229,11 @@ def execute_sol_dune_query(
 ) -> str:
     payload = {
         "performance": "medium",
-        "query_parameters": [
-            {"key": "wallets_csv", "type": "text", "value": ",".join(addresses)},
-            {"key": "start_time", "type": "datetime", "value": start_time.strftime("%Y-%m-%d %H:%M:%S")},
-            {"key": "end_time", "type": "datetime", "value": end_time.strftime("%Y-%m-%d %H:%M:%S")},
-        ],
+        "query_parameters": {
+            "wallets_csv": ",".join(addresses),
+            "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
     }
     response = session.post(
         f"{DUNE_API_BASE}/query/{query_id}/execute",
