@@ -1,0 +1,40 @@
+name: Smart Money Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DUNE_API_KEY: ${{ secrets.DUNE_API_KEY }}
+      DUNE_EVM_QUERY_ID: "7325007"
+      DUNE_SOL_QUERY_ID: "7325094"
+      SMART_MONEY_CSV: ${{ github.workspace }}/smart_money_active.csv
+      POLL_INTERVAL_SECONDS: "3600"
+      STATE_FILE: /tmp/smart_money_monitor_state.json
+      ALERT_LOG_FILE: /tmp/smart_money_alerts.log
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      GENERIC_WEBHOOK_URL: ${{ secrets.GENERIC_WEBHOOK_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor once
+        run: python smart_money_monitor.py --once

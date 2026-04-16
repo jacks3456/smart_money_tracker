@@ -1,0 +1,10 @@
+.env
+.venv/
+.pycache/
+__pycache__/
+*.pyc
+alerts.log
+monitor.out
+monitor_state.json
+launchd.stdout.log
+launchd.stderr.log
