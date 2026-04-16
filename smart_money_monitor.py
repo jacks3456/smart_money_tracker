@@ -21,7 +21,7 @@ DEFAULT_SOL_QUERY_ID = 7325094
 DEFAULT_BNB_FALLBACK_QUERY_ID = 7325474
 DEFAULT_POLL_INTERVAL_SECONDS = 3600
 DEFAULT_BOOTSTRAP_LOOKBACK_MINUTES = 10
-DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_TIMEOUT_SECONDS = 90
 MAX_SEEN_TRANSACTIONS = 5000
 USER_AGENT = "smart-money-tracker/1.0"
 EVM_MONITOR_CHAINS = ("ethereum", "bnb", "base")
@@ -302,6 +302,11 @@ def wait_for_results(session: requests.Session, execution_id: str) -> list[dict[
     raise TimeoutError(f"Dune execution {execution_id} did not finish in time, last state={last_state}")
 
 
+def execute_with_result_fetch(execute_fn, *args, **kwargs) -> list[dict[str, Any]]:
+    execution_id = execute_fn(*args, **kwargs)
+    return wait_for_results(kwargs["session"], execution_id)
+
+
 def format_amount(value: Any) -> str:
     if value is None:
         return "n/a"
@@ -420,37 +425,61 @@ def run_once(
     if evm_watchlist:
         evm_addresses = [watch.address for watch in evm_watchlist]
         for address_batch in batch_addresses(evm_addresses):
-            evm_execution_id = execute_dune_query(
-                session=session,
-                query_id=evm_query_id,
-                addresses=address_batch,
-                blockchains=set(EVM_MONITOR_CHAINS),
-                start_time=start_time,
-                end_time=end_time,
-            )
-            rows.extend(wait_for_results(session, evm_execution_id))
+            try:
+                rows.extend(
+                    execute_with_result_fetch(
+                        execute_dune_query,
+                        session=session,
+                        query_id=evm_query_id,
+                        addresses=address_batch,
+                        blockchains=set(EVM_MONITOR_CHAINS),
+                        start_time=start_time,
+                        end_time=end_time,
+                    )
+                )
+            except Exception as exc:
+                append_alert_log(
+                    alert_log_file,
+                    f"[{isoformat_z(utc_now())}] evm batch query failed for {len(address_batch)} addresses: {exc}",
+                )
 
         for address_batch in batch_addresses(evm_addresses):
-            bnb_execution_id = execute_bnb_fallback_query(
-                session=session,
-                query_id=bnb_fallback_query_id,
-                addresses=address_batch,
-                start_time=start_time,
-                end_time=end_time,
-            )
-            rows.extend(wait_for_results(session, bnb_execution_id))
+            try:
+                rows.extend(
+                    execute_with_result_fetch(
+                        execute_bnb_fallback_query,
+                        session=session,
+                        query_id=bnb_fallback_query_id,
+                        addresses=address_batch,
+                        start_time=start_time,
+                        end_time=end_time,
+                    )
+                )
+            except Exception as exc:
+                append_alert_log(
+                    alert_log_file,
+                    f"[{isoformat_z(utc_now())}] bnb fallback batch query failed for {len(address_batch)} addresses: {exc}",
+                )
 
     if sol_watchlist:
         sol_addresses = [watch.address for watch in sol_watchlist]
         for address_batch in batch_addresses(sol_addresses):
-            sol_execution_id = execute_sol_dune_query(
-                session=session,
-                query_id=sol_query_id,
-                addresses=address_batch,
-                start_time=start_time,
-                end_time=end_time,
-            )
-            rows.extend(wait_for_results(session, sol_execution_id))
+            try:
+                rows.extend(
+                    execute_with_result_fetch(
+                        execute_sol_dune_query,
+                        session=session,
+                        query_id=sol_query_id,
+                        addresses=address_batch,
+                        start_time=start_time,
+                        end_time=end_time,
+                    )
+                )
+            except Exception as exc:
+                append_alert_log(
+                    alert_log_file,
+                    f"[{isoformat_z(utc_now())}] sol batch query failed for {len(address_batch)} addresses: {exc}",
+                )
 
     seen_tx_hashes: dict[str, str] = state.get("seen_tx_hashes", {})
     fresh_rows: list[tuple[dict[str, Any], list[WatchAddress]]] = []

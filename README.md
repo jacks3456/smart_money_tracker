@@ -9,6 +9,8 @@
 
 其中 `bnb` 额外带一层 decoded event fallback：如果某些协议暂时没有进入 `dex.trades`，脚本还会尝试从 `bnb.logs_decoded / bnb.traces_decoded` 中识别 swap-like 事件。
 
+脚本也带了批次容错：如果某一批 Dune 查询超时或失败，不会让整轮监控直接中断，而是记录错误后继续处理其他批次。
+
 ## 文件说明
 
 - `smart_money_monitor.py`: 主监控脚本
