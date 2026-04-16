@@ -1,4 +1,5 @@
 address_type,address,last_active,active_chains,tx_count_7d,tx_count_30d
+evm,0xac249d4fad1198eb9b124d4aebaee40f7a003bf1,manual_test,ethereum|bnb|base,0,0
 evm,0x2a93e999816c9826ade0b51aaa2d83240d8f4596,2026-04-15 08:25:11.000 UTC,base|bnb|ethereum,22,192
 evm,0xc81f7b9bbd22a92a1e8c6512ff18e7606c0d097d,2026-04-15 08:10:47.000 UTC,base|bnb|ethereum,19,93
 evm,0x6075b5cfbd641818a9865cf9edb901f336258161,2026-04-15 08:02:52.000 UTC,base|bnb|ethereum,4,42
