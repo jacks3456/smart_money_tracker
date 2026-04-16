@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 DUNE_API_BASE = "https://api.dune.com/api/v1"
 DEFAULT_EVM_QUERY_ID = 7325007
 DEFAULT_SOL_QUERY_ID = 7325094
+DEFAULT_BNB_FALLBACK_QUERY_ID = 7325474
 DEFAULT_POLL_INTERVAL_SECONDS = 3600
 DEFAULT_BOOTSTRAP_LOOKBACK_MINUTES = 10
 DEFAULT_TIMEOUT_SECONDS = 30
@@ -248,6 +249,34 @@ def execute_sol_dune_query(
     return execution_id
 
 
+def execute_bnb_fallback_query(
+    session: requests.Session,
+    query_id: int,
+    addresses: list[str],
+    start_time: datetime,
+    end_time: datetime,
+) -> str:
+    payload = {
+        "performance": "medium",
+        "query_parameters": {
+            "wallets_csv": ",".join(addresses),
+            "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    }
+    response = session.post(
+        f"{DUNE_API_BASE}/query/{query_id}/execute",
+        json=payload,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data = response.json()
+    execution_id = data.get("execution_id")
+    if not execution_id:
+        raise RuntimeError(f"missing execution_id in Dune response: {data}")
+    return execution_id
+
+
 def wait_for_results(session: requests.Session, execution_id: str) -> list[dict[str, Any]]:
     deadline = time.time() + DEFAULT_TIMEOUT_SECONDS
     last_state = None
@@ -313,6 +342,7 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     blockchain = row.get("blockchain", "unknown")
     project = row.get("project", "unknown")
     version = row.get("version_name") or row.get("version") or "unknown"
+    event_name = row.get("event_name")
     sold_symbol = row.get("token_sold_symbol") or "unknown"
     bought_symbol = row.get("token_bought_symbol") or "unknown"
     sold_amount = format_amount(row.get("token_sold_amount"))
@@ -320,10 +350,14 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     amount_usd = format_amount(row.get("amount_usd"))
     block_time = row.get("block_time", "unknown")
     tx_ref = row.get("tx_hash") or row.get("tx_id") or "unknown"
+    if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
+        trade_line = f"trade: {sold_amount} {sold_symbol} -> {bought_amount} {bought_symbol} (usd={amount_usd})"
+    else:
+        trade_line = f"signal: decoded BNB swap-like activity via event `{event_name or 'unknown'}`"
     return (
         f"[{block_time}] swap detected on {blockchain}/{project} ({version})\n"
         f"watched wallet(s): {labels}\n"
-        f"trade: {sold_amount} {sold_symbol} -> {bought_amount} {bought_symbol} (usd={amount_usd})\n"
+        f"{trade_line}\n"
         f"tx: {tx_ref}"
     )
 
@@ -368,6 +402,7 @@ def run_once(
     session: requests.Session,
     evm_query_id: int,
     sol_query_id: int,
+    bnb_fallback_query_id: int,
     csv_path: Path,
     state_file: Path,
     alert_log_file: Path,
@@ -394,6 +429,16 @@ def run_once(
                 end_time=end_time,
             )
             rows.extend(wait_for_results(session, evm_execution_id))
+
+        for address_batch in batch_addresses(evm_addresses):
+            bnb_execution_id = execute_bnb_fallback_query(
+                session=session,
+                query_id=bnb_fallback_query_id,
+                addresses=address_batch,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            rows.extend(wait_for_results(session, bnb_execution_id))
 
     if sol_watchlist:
         sol_addresses = [watch.address for watch in sol_watchlist]
@@ -456,6 +501,7 @@ def main() -> int:
 
     evm_query_id = int(os.getenv("DUNE_EVM_QUERY_ID", os.getenv("DUNE_QUERY_ID", str(DEFAULT_EVM_QUERY_ID))))
     sol_query_id = int(os.getenv("DUNE_SOL_QUERY_ID", str(DEFAULT_SOL_QUERY_ID)))
+    bnb_fallback_query_id = int(os.getenv("DUNE_BNB_FALLBACK_QUERY_ID", str(DEFAULT_BNB_FALLBACK_QUERY_ID)))
     csv_path = Path(os.getenv("SMART_MONEY_CSV", "smart_money_active.csv")).expanduser().resolve()
     state_file = Path(os.getenv("STATE_FILE", "monitor_state.json")).expanduser().resolve()
     alert_log_file = Path(os.getenv("ALERT_LOG_FILE", "alerts.log")).expanduser().resolve()
@@ -466,7 +512,7 @@ def main() -> int:
 
     session = http_session(api_key)
     print(
-        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}; polling every {poll_interval}s",
+        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}, bnb_fallback={bnb_fallback_query_id}; polling every {poll_interval}s",
         flush=True,
     )
 
@@ -476,6 +522,7 @@ def main() -> int:
                 session=session,
                 evm_query_id=evm_query_id,
                 sol_query_id=sol_query_id,
+                bnb_fallback_query_id=bnb_fallback_query_id,
                 csv_path=csv_path,
                 state_file=state_file,
                 alert_log_file=alert_log_file,

@@ -14,6 +14,7 @@ jobs:
       DUNE_API_KEY: ${{ secrets.DUNE_API_KEY }}
       DUNE_EVM_QUERY_ID: "7325007"
       DUNE_SOL_QUERY_ID: "7325094"
+      DUNE_BNB_FALLBACK_QUERY_ID: "7325474"
       SMART_MONEY_CSV: ${{ github.workspace }}/smart_money_active.csv
       POLL_INTERVAL_SECONDS: "3600"
       STATE_FILE: /tmp/smart_money_monitor_state.json

@@ -7,6 +7,8 @@
 
 只要命中 swap，就立刻输出告警，并可选推送到 Telegram / Webhook。默认配置已经切到低成本模式，每 `1` 小时轮询一次。
 
+其中 `bnb` 额外带一层 decoded event fallback：如果某些协议暂时没有进入 `dex.trades`，脚本还会尝试从 `bnb.logs_decoded / bnb.traces_decoded` 中识别 swap-like 事件。
+
 ## 文件说明
 
 - `smart_money_monitor.py`: 主监控脚本
@@ -55,6 +57,7 @@ cp .env.example .env
 
 - EVM: `7325007`
 - Solana: `7325094`
+- BNB fallback: `7325474`
 
 3. 填好 `smart_money_active.csv`
 
@@ -131,6 +134,7 @@ launchctl unload ~/Library/LaunchAgents/com.smart_money_tracker.monitor.plist
 - 通过 Dune API 调用两条查询：
 - EVM -> `7325007`
 - Solana -> `7325094`
+- BNB fallback -> `7325474`
 - 每次轮询只查上次检查之后的窗口
 - 本地状态保存在 `monitor_state.json`
 - 用 `seen_tx_hashes` 做去重，避免重复告警
