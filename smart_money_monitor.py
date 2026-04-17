@@ -381,7 +381,6 @@ def tx_identifier(row: dict[str, Any]) -> str:
 
 
 def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
-    labels = ", ".join(f"{item.label} ({item.address})" for item in matches)
     watched_wallets = ", ".join(item.address for item in matches)
     blockchain = display_value(row.get("blockchain"), "unknown")
     project = display_value(row.get("project"), "unknown")
@@ -397,7 +396,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     token_pair = display_value(row.get("token_pair"), f"{sold_symbol}/{bought_symbol}")
     token_sold_address = display_value(row.get("token_sold_address"), "n/a")
     token_bought_address = display_value(row.get("token_bought_address"), "n/a")
-    trader_wallet = display_value(row.get("trader_id") or row.get("taker") or row.get("tx_from"), "n/a")
     trade_source = display_value(row.get("trade_source"), "direct")
 
     if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
@@ -408,8 +406,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
             f"dex: {project} ({version})\n"
             f"source: {trade_source}\n"
             f"watched wallet: {watched_wallets}\n"
-            f"matched label: {labels}\n"
-            f"acting wallet: {trader_wallet}\n"
             f"pair: {token_pair}\n"
             f"sell: {sold_amount} {sold_symbol}\n"
             f"sell token: {token_sold_address}\n"
@@ -425,8 +421,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
         f"chain: {blockchain}\n"
         f"source: {project} ({version})\n"
         f"watched wallet: {watched_wallets}\n"
-        f"matched label: {labels}\n"
-        f"acting wallet: {trader_wallet}\n"
         f"event: {event_name}\n"
         f"token details: unavailable in fallback query\n"
         f"tx: {tx_ref}"
