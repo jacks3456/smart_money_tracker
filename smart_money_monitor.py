@@ -398,8 +398,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     token_sold_address = display_value(row.get("token_sold_address"), "n/a")
     token_bought_address = display_value(row.get("token_bought_address"), "n/a")
     trader_wallet = display_value(row.get("trader_id") or row.get("taker") or row.get("tx_from"), "n/a")
-    tx_to = display_value(row.get("tx_to"), "n/a")
-    project_contract = display_value(row.get("project_contract_address") or row.get("project_program_id"), "n/a")
     trade_source = display_value(row.get("trade_source"), "direct")
 
     if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
@@ -412,8 +410,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
             f"watched wallet: {watched_wallets}\n"
             f"matched label: {labels}\n"
             f"acting wallet: {trader_wallet}\n"
-            f"router/program: {project_contract}\n"
-            f"tx to: {tx_to}\n"
             f"pair: {token_pair}\n"
             f"sell: {sold_amount} {sold_symbol}\n"
             f"sell token: {token_sold_address}\n"
@@ -431,8 +427,6 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
         f"watched wallet: {watched_wallets}\n"
         f"matched label: {labels}\n"
         f"acting wallet: {trader_wallet}\n"
-        f"router/program: {project_contract}\n"
-        f"tx to: {tx_to}\n"
         f"event: {event_name}\n"
         f"token details: unavailable in fallback query\n"
         f"tx: {tx_ref}"
