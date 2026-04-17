@@ -389,7 +389,7 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
         trade_line = f"trade: {sold_amount} {sold_symbol} -> {bought_amount} {bought_symbol} (usd={amount_usd})"
     else:
-        trade_line = f"signal: decoded EVM swap-like activity via event `{event_name or 'unknown'}`"
+        trade_line = f"signal: swap-like activity via `{event_name or 'unknown'}`"
     return (
         f"[{block_time}] swap detected on {blockchain}/{project} ({version})\n"
         f"watched wallet(s): {labels}\n"
