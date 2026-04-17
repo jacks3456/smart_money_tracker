@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 DUNE_API_BASE = "https://api.dune.com/api/v1"
 DEFAULT_EVM_QUERY_ID = 7325007
 DEFAULT_SOL_QUERY_ID = 7325094
+DEFAULT_ETHEREUM_FALLBACK_QUERY_ID = 7329980
+DEFAULT_BASE_FALLBACK_QUERY_ID = 7329981
 DEFAULT_BNB_FALLBACK_QUERY_ID = 7325474
 DEFAULT_POLL_INTERVAL_SECONDS = 3600
 DEFAULT_BOOTSTRAP_LOOKBACK_MINUTES = 10
@@ -249,7 +251,7 @@ def execute_sol_dune_query(
     return execution_id
 
 
-def execute_bnb_fallback_query(
+def execute_evm_fallback_query(
     session: requests.Session,
     query_id: int,
     addresses: list[str],
@@ -358,7 +360,7 @@ def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
         trade_line = f"trade: {sold_amount} {sold_symbol} -> {bought_amount} {bought_symbol} (usd={amount_usd})"
     else:
-        trade_line = f"signal: decoded BNB swap-like activity via event `{event_name or 'unknown'}`"
+        trade_line = f"signal: decoded EVM swap-like activity via event `{event_name or 'unknown'}`"
     return (
         f"[{block_time}] swap detected on {blockchain}/{project} ({version})\n"
         f"watched wallet(s): {labels}\n"
@@ -407,7 +409,7 @@ def run_once(
     session: requests.Session,
     evm_query_id: int,
     sol_query_id: int,
-    bnb_fallback_query_id: int,
+    evm_fallback_query_ids: dict[str, int],
     csv_path: Path,
     state_file: Path,
     alert_log_file: Path,
@@ -443,23 +445,24 @@ def run_once(
                     f"[{isoformat_z(utc_now())}] evm batch query failed for {len(address_batch)} addresses: {exc}",
                 )
 
-        for address_batch in batch_addresses(evm_addresses):
-            try:
-                rows.extend(
-                    execute_with_result_fetch(
-                        execute_bnb_fallback_query,
-                        session=session,
-                        query_id=bnb_fallback_query_id,
-                        addresses=address_batch,
-                        start_time=start_time,
-                        end_time=end_time,
+        for blockchain, query_id in evm_fallback_query_ids.items():
+            for address_batch in batch_addresses(evm_addresses):
+                try:
+                    rows.extend(
+                        execute_with_result_fetch(
+                            execute_evm_fallback_query,
+                            session=session,
+                            query_id=query_id,
+                            addresses=address_batch,
+                            start_time=start_time,
+                            end_time=end_time,
+                        )
                     )
-                )
-            except Exception as exc:
-                append_alert_log(
-                    alert_log_file,
-                    f"[{isoformat_z(utc_now())}] bnb fallback batch query failed for {len(address_batch)} addresses: {exc}",
-                )
+                except Exception as exc:
+                    append_alert_log(
+                        alert_log_file,
+                        f"[{isoformat_z(utc_now())}] {blockchain} fallback batch query failed for {len(address_batch)} addresses: {exc}",
+                    )
 
     if sol_watchlist:
         sol_addresses = [watch.address for watch in sol_watchlist]
@@ -530,7 +533,11 @@ def main() -> int:
 
     evm_query_id = int(os.getenv("DUNE_EVM_QUERY_ID", os.getenv("DUNE_QUERY_ID", str(DEFAULT_EVM_QUERY_ID))))
     sol_query_id = int(os.getenv("DUNE_SOL_QUERY_ID", str(DEFAULT_SOL_QUERY_ID)))
-    bnb_fallback_query_id = int(os.getenv("DUNE_BNB_FALLBACK_QUERY_ID", str(DEFAULT_BNB_FALLBACK_QUERY_ID)))
+    evm_fallback_query_ids = {
+        "ethereum": int(os.getenv("DUNE_ETHEREUM_FALLBACK_QUERY_ID", str(DEFAULT_ETHEREUM_FALLBACK_QUERY_ID))),
+        "base": int(os.getenv("DUNE_BASE_FALLBACK_QUERY_ID", str(DEFAULT_BASE_FALLBACK_QUERY_ID))),
+        "bnb": int(os.getenv("DUNE_BNB_FALLBACK_QUERY_ID", str(DEFAULT_BNB_FALLBACK_QUERY_ID))),
+    }
     csv_path = Path(os.getenv("SMART_MONEY_CSV", "smart_money_active.csv")).expanduser().resolve()
     state_file = Path(os.getenv("STATE_FILE", "monitor_state.json")).expanduser().resolve()
     alert_log_file = Path(os.getenv("ALERT_LOG_FILE", "alerts.log")).expanduser().resolve()
@@ -541,7 +548,7 @@ def main() -> int:
 
     session = http_session(api_key)
     print(
-        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}, bnb_fallback={bnb_fallback_query_id}; polling every {poll_interval}s",
+        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}, evm_fallbacks={evm_fallback_query_ids}; polling every {poll_interval}s",
         flush=True,
     )
 
@@ -551,7 +558,7 @@ def main() -> int:
                 session=session,
                 evm_query_id=evm_query_id,
                 sol_query_id=sol_query_id,
-                bnb_fallback_query_id=bnb_fallback_query_id,
+                evm_fallback_query_ids=evm_fallback_query_ids,
                 csv_path=csv_path,
                 state_file=state_file,
                 alert_log_file=alert_log_file,
