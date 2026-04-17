@@ -350,6 +350,13 @@ def format_amount(value: Any) -> str:
     return f"{number:.8f}".rstrip("0").rstrip(".")
 
 
+def display_value(value: Any, default: str = "n/a") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
 def classify_matches(row: dict[str, Any], watch_map: dict[str, WatchAddress]) -> list[WatchAddress]:
     matches: list[WatchAddress] = []
     for candidate in (row.get("taker"), row.get("tx_from"), row.get("tx_to"), row.get("trader_id")):
@@ -375,25 +382,59 @@ def tx_identifier(row: dict[str, Any]) -> str:
 
 def format_alert(row: dict[str, Any], matches: list[WatchAddress]) -> str:
     labels = ", ".join(f"{item.label} ({item.address})" for item in matches)
-    blockchain = row.get("blockchain", "unknown")
-    project = row.get("project", "unknown")
-    version = row.get("version_name") or row.get("version") or "unknown"
-    event_name = row.get("event_name")
-    sold_symbol = row.get("token_sold_symbol") or "unknown"
-    bought_symbol = row.get("token_bought_symbol") or "unknown"
+    watched_wallets = ", ".join(item.address for item in matches)
+    blockchain = display_value(row.get("blockchain"), "unknown")
+    project = display_value(row.get("project"), "unknown")
+    version = display_value(row.get("version_name") or row.get("version"), "unknown")
+    event_name = display_value(row.get("event_name"), "unknown")
+    sold_symbol = display_value(row.get("token_sold_symbol"), "unknown")
+    bought_symbol = display_value(row.get("token_bought_symbol"), "unknown")
     sold_amount = format_amount(row.get("token_sold_amount"))
     bought_amount = format_amount(row.get("token_bought_amount"))
     amount_usd = format_amount(row.get("amount_usd"))
-    block_time = row.get("block_time", "unknown")
-    tx_ref = row.get("tx_hash") or row.get("tx_id") or "unknown"
+    block_time = display_value(row.get("block_time"), "unknown")
+    tx_ref = display_value(row.get("tx_hash") or row.get("tx_id"), "unknown")
+    token_pair = display_value(row.get("token_pair"), f"{sold_symbol}/{bought_symbol}")
+    token_sold_address = display_value(row.get("token_sold_address"), "n/a")
+    token_bought_address = display_value(row.get("token_bought_address"), "n/a")
+    trader_wallet = display_value(row.get("trader_id") or row.get("taker") or row.get("tx_from"), "n/a")
+    tx_to = display_value(row.get("tx_to"), "n/a")
+    project_contract = display_value(row.get("project_contract_address") or row.get("project_program_id"), "n/a")
+    trade_source = display_value(row.get("trade_source"), "direct")
+
     if row.get("token_sold_symbol") or row.get("token_bought_symbol"):
-        trade_line = f"trade: {sold_amount} {sold_symbol} -> {bought_amount} {bought_symbol} (usd={amount_usd})"
-    else:
-        trade_line = f"signal: swap-like activity via `{event_name or 'unknown'}`"
+        return (
+            f"swap detected\n"
+            f"time: {block_time} UTC\n"
+            f"chain: {blockchain}\n"
+            f"dex: {project} ({version})\n"
+            f"source: {trade_source}\n"
+            f"watched wallet: {watched_wallets}\n"
+            f"matched label: {labels}\n"
+            f"acting wallet: {trader_wallet}\n"
+            f"router/program: {project_contract}\n"
+            f"tx to: {tx_to}\n"
+            f"pair: {token_pair}\n"
+            f"sell: {sold_amount} {sold_symbol}\n"
+            f"sell token: {token_sold_address}\n"
+            f"buy: {bought_amount} {bought_symbol}\n"
+            f"buy token: {token_bought_address}\n"
+            f"usd value: {amount_usd}\n"
+            f"tx: {tx_ref}"
+        )
+
     return (
-        f"[{block_time}] swap detected on {blockchain}/{project} ({version})\n"
-        f"watched wallet(s): {labels}\n"
-        f"{trade_line}\n"
+        f"swap-like signal detected\n"
+        f"time: {block_time} UTC\n"
+        f"chain: {blockchain}\n"
+        f"source: {project} ({version})\n"
+        f"watched wallet: {watched_wallets}\n"
+        f"matched label: {labels}\n"
+        f"acting wallet: {trader_wallet}\n"
+        f"router/program: {project_contract}\n"
+        f"tx to: {tx_to}\n"
+        f"event: {event_name}\n"
+        f"token details: unavailable in fallback query\n"
         f"tx: {tx_ref}"
     )
 

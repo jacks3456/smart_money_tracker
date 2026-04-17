@@ -7,6 +7,8 @@
 
 只要命中 swap，就立刻输出告警，并可选推送到 Telegram / Webhook。默认配置已经切到低成本模式，每 `1` 小时轮询一次。
 
+主查询告警会尽量带上完整信息：时间、公链、监控命中钱包、实际发起钱包、DEX / 路由、买卖代币名称、代币地址、数量、USD 估值和交易哈希。
+
 其中 `ethereum`、`base`、`bnb` 三条 EVM 链都额外带一层 decoded event fallback：如果某些协议暂时没有进入 `dex.trades`，脚本还会尝试从对应链的 `logs_decoded / traces_decoded` 中识别 swap-like 事件。
 
 `solana` 也带了一层日志 fallback：如果某些 swap 还没进入 `dex_solana.trades`，脚本会额外从 `solana.transactions` 的交易日志里识别 `swap/route` 这类 swap-like 信号。
