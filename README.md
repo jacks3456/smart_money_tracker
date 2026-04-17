@@ -9,6 +9,8 @@
 
 其中 `ethereum`、`base`、`bnb` 三条 EVM 链都额外带一层 decoded event fallback：如果某些协议暂时没有进入 `dex.trades`，脚本还会尝试从对应链的 `logs_decoded / traces_decoded` 中识别 swap-like 事件。
 
+`solana` 也带了一层日志 fallback：如果某些 swap 还没进入 `dex_solana.trades`，脚本会额外从 `solana.transactions` 的交易日志里识别 `swap/route` 这类 swap-like 信号。
+
 脚本也带了批次容错：如果某一批 Dune 查询超时或失败，不会让整轮监控直接中断，而是记录错误后继续处理其他批次。
 
 ## 文件说明
@@ -59,6 +61,7 @@ cp .env.example .env
 
 - EVM: `7325007`
 - Solana: `7325094`
+- Solana fallback: `7330025`
 - Ethereum fallback: `7329980`
 - Base fallback: `7329981`
 - BNB fallback: `7325474`
@@ -138,6 +141,7 @@ launchctl unload ~/Library/LaunchAgents/com.smart_money_tracker.monitor.plist
 - 通过 Dune API 调用两条查询：
 - EVM -> `7325007`
 - Solana -> `7325094`
+- Solana fallback -> `7330025`
 - Ethereum fallback -> `7329980`
 - Base fallback -> `7329981`
 - BNB fallback -> `7325474`
@@ -149,4 +153,5 @@ launchctl unload ~/Library/LaunchAgents/com.smart_money_tracker.monitor.plist
 ## 当前假设
 
 - EVM swap 来源于 Dune 的 `dex.trades`
-- Solana swap 来源于 Dune 的 `dex_solana.trades`
+- Solana 主查询来源于 Dune 的 `dex_solana.trades`
+- Solana fallback 会把 `solana.transactions` 里带 `swap/route` 日志的交易视为 swap-like 信号，所以覆盖更广，但相对主查询更可能出现少量误报

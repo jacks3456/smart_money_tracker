@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 DUNE_API_BASE = "https://api.dune.com/api/v1"
 DEFAULT_EVM_QUERY_ID = 7325007
 DEFAULT_SOL_QUERY_ID = 7325094
+DEFAULT_SOL_FALLBACK_QUERY_ID = 7330025
 DEFAULT_ETHEREUM_FALLBACK_QUERY_ID = 7329980
 DEFAULT_BASE_FALLBACK_QUERY_ID = 7329981
 DEFAULT_BNB_FALLBACK_QUERY_ID = 7325474
@@ -251,6 +252,34 @@ def execute_sol_dune_query(
     return execution_id
 
 
+def execute_sol_fallback_query(
+    session: requests.Session,
+    query_id: int,
+    addresses: list[str],
+    start_time: datetime,
+    end_time: datetime,
+) -> str:
+    payload = {
+        "performance": "medium",
+        "query_parameters": {
+            "wallets_csv": ",".join(addresses),
+            "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    }
+    response = session.post(
+        f"{DUNE_API_BASE}/query/{query_id}/execute",
+        json=payload,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data = response.json()
+    execution_id = data.get("execution_id")
+    if not execution_id:
+        raise RuntimeError(f"missing execution_id in Dune response: {data}")
+    return execution_id
+
+
 def execute_evm_fallback_query(
     session: requests.Session,
     query_id: int,
@@ -409,6 +438,7 @@ def run_once(
     session: requests.Session,
     evm_query_id: int,
     sol_query_id: int,
+    sol_fallback_query_id: int,
     evm_fallback_query_ids: dict[str, int],
     csv_path: Path,
     state_file: Path,
@@ -484,6 +514,24 @@ def run_once(
                     f"[{isoformat_z(utc_now())}] sol batch query failed for {len(address_batch)} addresses: {exc}",
                 )
 
+        for address_batch in batch_addresses(sol_addresses):
+            try:
+                rows.extend(
+                    execute_with_result_fetch(
+                        execute_sol_fallback_query,
+                        session=session,
+                        query_id=sol_fallback_query_id,
+                        addresses=address_batch,
+                        start_time=start_time,
+                        end_time=end_time,
+                    )
+                )
+            except Exception as exc:
+                append_alert_log(
+                    alert_log_file,
+                    f"[{isoformat_z(utc_now())}] sol fallback batch query failed for {len(address_batch)} addresses: {exc}",
+                )
+
     seen_tx_hashes: dict[str, str] = state.get("seen_tx_hashes", {})
     fresh_rows: list[tuple[dict[str, Any], list[WatchAddress]]] = []
     for row in rows:
@@ -533,6 +581,7 @@ def main() -> int:
 
     evm_query_id = int(os.getenv("DUNE_EVM_QUERY_ID", os.getenv("DUNE_QUERY_ID", str(DEFAULT_EVM_QUERY_ID))))
     sol_query_id = int(os.getenv("DUNE_SOL_QUERY_ID", str(DEFAULT_SOL_QUERY_ID)))
+    sol_fallback_query_id = int(os.getenv("DUNE_SOL_FALLBACK_QUERY_ID", str(DEFAULT_SOL_FALLBACK_QUERY_ID)))
     evm_fallback_query_ids = {
         "ethereum": int(os.getenv("DUNE_ETHEREUM_FALLBACK_QUERY_ID", str(DEFAULT_ETHEREUM_FALLBACK_QUERY_ID))),
         "base": int(os.getenv("DUNE_BASE_FALLBACK_QUERY_ID", str(DEFAULT_BASE_FALLBACK_QUERY_ID))),
@@ -548,7 +597,7 @@ def main() -> int:
 
     session = http_session(api_key)
     print(
-        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}, evm_fallbacks={evm_fallback_query_ids}; polling every {poll_interval}s",
+        f"watching {csv_path} with Dune queries evm={evm_query_id}, sol={sol_query_id}, sol_fallback={sol_fallback_query_id}, evm_fallbacks={evm_fallback_query_ids}; polling every {poll_interval}s",
         flush=True,
     )
 
@@ -558,6 +607,7 @@ def main() -> int:
                 session=session,
                 evm_query_id=evm_query_id,
                 sol_query_id=sol_query_id,
+                sol_fallback_query_id=sol_fallback_query_id,
                 evm_fallback_query_ids=evm_fallback_query_ids,
                 csv_path=csv_path,
                 state_file=state_file,
